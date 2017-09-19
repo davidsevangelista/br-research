@@ -6,6 +6,106 @@ style.use('fivethirtyeight')
 
 from fetcher_br_data import *
 
+def write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date):
+    # Quotes
+    lob_1_one_day = load_lob_zip(path_lob, symbol, date, depth)
+    pickle.dump(lob_1_one_day ,open('lob_1_one_day.p', 'wb'))
+
+    # Cancelations
+    cancellations_one_day = load_cancelled_order_zip(path_cancelled, symbol, date)
+    pickle.dump(cancellations_one_day ,open('cancellations_one_day.p', 'wb'))
+
+    # Limit Orders
+    #limit_orders_one_day = load_LONEW_zip(path_LO, symbol, date[i])
+    #pickle.dump(limit_orders_one_day, open('limit_orders_one_day.p', 'wb'))
+
+    # Trades
+    trades_one_day = load_trades_zip(path_trades, symbol, date)
+    pickle.dump(trades_one_day, open('trades_one_day.p', 'wb'))
+
+
+def load_pickle_data():
+    lob_1_one_day = pickle.load( open('lob_1_one_day.p', 'rb'))
+    cancellations_one_day = pickle.load( open('cancellations_one_day.p', 'rb'))
+    #limit_orders_one_day = pickle.load(open('limit_orders_one_day.p', 'rb'))
+    trades_one_day = pickle.load(open('trades_one_day.p', 'rb'))
+    return (lob_1_one_day, cancellations_one_day, trades_one_day)
+
+def drop_rep(series):
+    return series.groupby(series.index).last()
+
+def to_resolution(t, dt):
+    return np.ceil(t/dt)*dt
+
+def to_reg_grid(s, dt):
+    t0 = np.datetime64(0,'D')
+    index = pd.Index(to_resolution(s.index.values - t0, dt) + t0, name = s.index.name)
+    r = pd.Series(s.index.values,index).groupby(level=0).max()
+    return pd.Series(s[r].values, r.index, name=s.name)
+
+
+def get_imbalance(quotes):
+    imb = quotes[['Bid Volume0', 'Ask Volume0']]
+    imb_num = imb.apply(lambda x: x[1] - x[0], axis=1)
+    imb_den = imb.apply(lambda x: x[0] + x[1], axis=1)
+    imbalance = pd.Series(imb_num.div(imb_den,axis='index')).drop_duplicates().dropna()
+    return imbalance
+
+def plot_imbalance_one_day():
+    plt.figure()
+    lob, cancellations, trades = load_pickle_data()
+    get_imbalance(lob).plot()
+    plt.show()
+
+def plot_imbalance_reg_grid(Time):
+    plt.figure()
+    lob, cancellations, trades = load_pickle_data()
+    to_reg_grid(drop_rep(get_imbalance(lob)),pd.to_timedelta(Time)).plot()
+    plt.show()
+
+def plot_lob_one_day():
+    plt.figure()
+    lob, cancellations, trades = load_pickle_data()
+    lob.set_index('Report Time', inplace=True)
+    lob[['Bid Price0','Ask Price0']].plot()
+    plt.show()
+
+def plot_lob_reg_grid(Time):
+    plt.figure()
+    lob, cancellations, trades = load_pickle_data()
+    lob.set_index('Report Time', inplace=True)
+    to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot()
+    to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)).plot()
+    plt.show()
+
+def plot_lob_and_imbalance_reg_grid(Time):
+
+    lob, cancellations, trades = load_pickle_data()
+
+    fig, ax1 = plt.subplots()
+    ax2 = ax1.twinx()
+    #rspine = ax2.spines['right']
+    #rspine.set_position(('axes',1))
+    #ax2.set_frame_on(True)
+    #ax2.patch.set_visible(False)
+    #fig.subplots_adjust(right=0.7)
+
+    imbalance = get_imbalance(lob)
+    imb_reg_grid = to_reg_grid(drop_rep(imbalance),pd.to_timedelta(Time))
+    imb_reg_grid.plot(ax=ax1)
+    #to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot(ax=ax2)
+    #to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)).plot(ax=ax1)
+
+    #lob_imb = [lob_reg_grid_bid, lob_reg_grid_ask, imb_reg_grid]
+    #lob_imb = pd.merge(lob_imb)
+    #lob_imb.set_index('Report Time', inplace=True)
+
+    #to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot(ax=ax, style='r-' )
+    #to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)).plot(ax=ax, style='b-')
+    #plt.show()
+    return fig, imb_reg_grid
+
+###################################TESTING AREA####################################################
 path_lob ='/home/evanged/Dropbox/Work-Research/Finance/LOB Study Data/QuotesByLevel/'
 path_trades = '/home/evanged/Dropbox/Work-Research/Finance/NewMarketData/Trades/'
 path_cancelled = '/home/evanged/Dropbox/Work-Research/Finance/NewMarketData/CanceledOrders/'
@@ -16,30 +116,12 @@ depth = 1
 date = [datetime.datetime(2017, 3, 10)]
 i = 0
 
-#lob_1 = load_lob_zip(path_lob, symbol, date[i], depth)
-#pickle.dump(lob_1 ,open('lob_1.p', 'wb'))
-lob_1 = pickle.load( open('lob_1.p', 'rb'))
+#write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date[i])
+lob, cancellations, trades = load_pickle_data()
+#plot_imbalance_one_day()
 
-#cancellations = load_cancelled_order_zip(path_cancelled, symbol, date[i])
-#pickle.dump(cancellations ,open('cancellations.p', 'wb'))
-cancellations = pickle.load( open('cancellations.p', 'rb'))
-
-#limit_orders = load_LONEW_zip(path_LO, symbol, date[i])
-#pickle.dump(lo_evt, open('limit_orders.p', 'wb'))
-#limit_orders = pickle.load(open('limit_orders.p', 'rb'))
-
-#trades = load_trades_zip(path_trades, symbol, date[i])
-#pickle.dump(trades, open('trades.p', 'wb'))
-trades = pickle.load(open('trades.p', 'rb'))
-
-plt.figure()
-plt.plot(lob_1['Bid Price']['price0'])
-plt.plot(lob_1['Ask Price']['price0'])
-#plt.plot(trades['Price'])
-plt.show()
-
-plt.figure()
-plt.plot(trades['Price'])
-plt.show()
-
+#plot_imbalance_reg_grid('10m')
+#plot_lob_one_day()
+#plot_lob_reg_grid('10m')
+fig_lob,imb_lob = plot_lob_and_imbalance_reg_grid('10m')
 

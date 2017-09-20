@@ -81,29 +81,25 @@ def plot_lob_reg_grid(Time):
 def plot_lob_and_imbalance_reg_grid(Time):
 
     lob, cancellations, trades = load_pickle_data()
-
-    fig, ax1 = plt.subplots()
+    # Plot Bid and Ask prices with imbalance
+    fig1 = plt.figure()
+    ax1 = fig1.add_subplot(111)
     ax2 = ax1.twinx()
-    #rspine = ax2.spines['right']
-    #rspine.set_position(('axes',1))
-    #ax2.set_frame_on(True)
-    #ax2.patch.set_visible(False)
-    #fig.subplots_adjust(right=0.7)
 
     imbalance = get_imbalance(lob)
     imb_reg_grid = to_reg_grid(drop_rep(imbalance),pd.to_timedelta(Time))
-    imb_reg_grid.plot(ax=ax1)
-    #to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot(ax=ax2)
-    #to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)).plot(ax=ax1)
+    ax2.plot(imb_reg_grid, 'go-')
+    ax2.set_ylabel('Imbalance', color='g')
 
-    #lob_imb = [lob_reg_grid_bid, lob_reg_grid_ask, imb_reg_grid]
-    #lob_imb = pd.merge(lob_imb)
-    #lob_imb.set_index('Report Time', inplace=True)
+    ax1.plot(to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)), 'b')
+    ax1.plot(to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)),'r')
+    ax1.set_ylabel('Bid Price (blue)/Ask Price (red)', color='k')
+    # Plot Trades
+    trades_reg_grid = to_reg_grid(drop_rep(trades["Price"]), pd.to_timedelta(Time))
+    fig2 = plt.figure()
+    plt.plot(trades_reg_grid, 'ko-')
 
-    #to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot(ax=ax, style='r-' )
-    #to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)).plot(ax=ax, style='b-')
-    #plt.show()
-    return fig, imb_reg_grid
+    return fig1, fig2
 
 ###################################TESTING AREA####################################################
 path_lob ='/home/evanged/Dropbox/Work-Research/Finance/LOB Study Data/QuotesByLevel/'
@@ -123,5 +119,6 @@ lob, cancellations, trades = load_pickle_data()
 #plot_imbalance_reg_grid('10m')
 #plot_lob_one_day()
 #plot_lob_reg_grid('10m')
-fig_lob,imb_lob = plot_lob_and_imbalance_reg_grid('10m')
-
+fig_lob_imb, fig_trades = plot_lob_and_imbalance_reg_grid('30m')
+fig_lob_imb.show()
+fig_trades.show()

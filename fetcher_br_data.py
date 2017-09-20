@@ -47,10 +47,11 @@ def load_LONEW_zip(path,symbol,date):
         if (file in [i.filename for i in zip.filelist]):
             x = pd.DataFrame(loadstr(zip.open(file, 'r')))
             x.columns = cancelled_and_LO_columns
-            x['Order Quantity'] = pd.to_numeric(x['Order Quantity'],errors='coerce')
-            x['Execution Quantity'] = pd.to_numeric(x['Execution Quantity'],errors='coerce')
-            x['Order Price'] = pd.to_numeric(x['Order Price'],errors='coerce')
-            x['Report Time'] = pd.to_datetime(x['Report Time'])
+            x["Order Quantity"] = pd.to_numeric(x["Order Quantity"],errors='coerce')
+            x["Execution Quantity"] = pd.to_numeric(x["Execution Quantity"],errors='coerce')
+            x["Order Price"] = pd.to_numeric(x["Order Price"],errors='coerce')
+            x["Report Time"] = pd.to_datetime(x["Report Time"])
+            x.set_index("Report Time", inplace=True)
 
     return x
 
@@ -63,10 +64,11 @@ def load_cancelled_order_zip(path,symbol,date):
         if (file in [i.filename for i in zip.filelist]):
             x = pd.DataFrame(loadstr(zip.open(file, 'r')))
             x.columns = cancelled_and_LO_columns
-            x['Order Quantity'] = pd.to_numeric(x['Order Quantity'],errors='coerce')
-            x['Execution Quantity'] = pd.to_numeric(x['Execution Quantity'],errors='coerce')
-            x['Order Price'] = pd.to_numeric(x['Order Price'],errors='coerce')
-            x['Report Time'] = pd.to_datetime(x['Report Time'])
+            x["Order Quantity"] = pd.to_numeric(x["Order Quantity"],errors='coerce')
+            x["Execution Quantity"] = pd.to_numeric(x["Execution Quantity"],errors='coerce')
+            x["Order Price"] = pd.to_numeric(x["Order Price"],errors='coerce')
+            x["Report Time"] = pd.to_datetime(x["Report Time"])
+            x.set_index("Report Time", inplace=True)
 
     return x
 
@@ -79,11 +81,11 @@ def load_trades_zip(path,symbol,date):
         if (file in [i.filename for i in zip.filelist]):
             x = pd.DataFrame(loadstr(zip.open(file, 'r')))
             x.columns = trades_columns
-            x['Volume'] = pd.to_numeric(x['Volume'],errors='coerce')
-            x['Price'] = pd.to_numeric(x['Price'],errors='coerce')
-            x['Report Time'] = pd.to_datetime(x['Report Time'])
+            x["Volume"] = pd.to_numeric(x["Volume"],errors='coerce')
+            x["Price"] = pd.to_numeric(x["Price"],errors='coerce')
+            x["Report Time"] = pd.to_datetime(x["Report Time"])
+            x.set_index("Report Time", inplace=True)
     return x
-
 
 def load_lob_zip(path,symbol,date,depth):
     zip_name = path + symbol + '_' + date.strftime("%Y%m%d") + ".zip"
@@ -101,7 +103,7 @@ def load_lob_zip(path,symbol,date,depth):
             f = zip.open(file,'r')
             data = [x.decode().strip('\r\n').split(sep=';') for x in f.readlines()]
             offer_price = pd.DataFrame([data[i][0:min(depth+2, len(data[i]))] if len(data[i]) >= 3 else [] for i in range(0, len(data))])
-            offer_price.columns = ['Time Frame', 'Report Time'] + ['Ask Price' + str(i) for i in range(0,depth)]
+            offer_price.columns = ['Time Frame', "Report Time"] + ['Ask Price' + str(i) for i in range(0,depth)]
             offer_price = offer_price[offer_price['Ask Price0'] != '']
             for i in range(0,depth):
                 offer_price['Ask Price' + str(i)] = pd.to_numeric(offer_price['Ask Price' + str(i)], errors='coerce')
@@ -117,7 +119,7 @@ def load_lob_zip(path,symbol,date,depth):
             bid_price = pd.DataFrame(
                 [data[i][0:min(depth + 2, len(data[i]))] if len(data[i]) >= 3 else [] for i in
                  range(0, len(data))])
-            bid_price.columns = ['Time Frame', 'Report Time'] + ['Bid Price' + str(i) for i in range(0, depth)]
+            bid_price.columns = ['Time Frame', "Report Time"] + ['Bid Price' + str(i) for i in range(0, depth)]
             bid_price = bid_price[bid_price['Bid Price0'] != '']
             for i in range(0, depth):
                 bid_price['Bid Price' + str(i)] = pd.to_numeric(bid_price['Bid Price' + str(i)], errors='coerce')
@@ -133,7 +135,7 @@ def load_lob_zip(path,symbol,date,depth):
             offer_qty = pd.DataFrame(
                 [data[i][0:min(depth + 2, len(data[i]))] if len(data[i]) >= 3 else [] for i in
                  range(0, len(data))])
-            offer_qty.columns = ['Time Frame', 'Report Time'] + ['Ask Volume' + str(i) for i in range(0, depth)]
+            offer_qty.columns = ['Time Frame', "Report Time"] + ['Ask Volume' + str(i) for i in range(0, depth)]
             offer_qty = offer_qty[offer_qty['Ask Volume0'] != '']
             for i in range(0, depth):
                 offer_qty['Ask Volume' + str(i)] = pd.to_numeric(offer_qty['Ask Volume' + str(i)], errors='coerce')
@@ -149,7 +151,7 @@ def load_lob_zip(path,symbol,date,depth):
             bid_qty = pd.DataFrame(
                 [data[i][0:min(depth + 2, len(data[i]))] if len(data[i]) >= 3 else [] for i in
                  range(0, len(data))])
-            bid_qty.columns = ['Time Frame', 'Report Time'] + ['Bid Volume' + str(i) for i in range(0, depth)]
+            bid_qty.columns = ['Time Frame', "Report Time"] + ['Bid Volume' + str(i) for i in range(0, depth)]
             bid_qty = bid_qty[bid_qty['Bid Volume0'] != '']
             for i in range(0, depth):
                 bid_qty['Bid Volume' + str(i)] = pd.to_numeric(bid_qty['Bid Volume' + str(i)], errors='coerce')
@@ -158,15 +160,10 @@ def load_lob_zip(path,symbol,date,depth):
             bid_qty = []
 
     lob_dict= {'Bid Price': bid_price, 'Ask Price': offer_price, 'Bid Volume':bid_qty, 'Ask Volume':offer_qty}
-    mlob_price = pd.merge(lob_dict['Bid Price'], lob_dict['Ask Price'], on=['Report Time', 'Time Frame'],how='outer').fillna(method='ffill')
-    mlob_volume = pd.merge(lob_dict['Bid Volume'], lob_dict['Ask Volume'], on=['Report Time', 'Time Frame'],how='outer').fillna(method='ffill')
+    mlob_price = pd.merge(lob_dict['Bid Price'], lob_dict['Ask Price'], on=["Report Time", 'Time Frame'],how='outer').fillna(method='ffill')
+    mlob_volume = pd.merge(lob_dict['Bid Volume'], lob_dict['Ask Volume'], on=["Report Time", 'Time Frame'],how='outer').fillna(method='ffill')
     mlob = pd.merge(mlob_price, mlob_volume,how='inner').fillna(method='ffill').dropna()
-    mlob['Report Time'] = pd.to_datetime(mlob['Report Time'])
-    mlob.set_index('Report Time', inplace=True)
+    mlob["Report Time"] = pd.to_datetime(mlob["Report Time"])
+    mlob.set_index("Report Time", inplace=True)
 
     return mlob
-
-
-
-
-

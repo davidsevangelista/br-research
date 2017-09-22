@@ -6,6 +6,7 @@ style.use('fivethirtyeight')
 
 from fetcher_br_data import *
 
+# Write data in pickle format
 def write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date):
     # Quotes
     lob_1_one_day = load_lob_zip(path_lob, symbol, date, depth)
@@ -23,7 +24,7 @@ def write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date):
     trades_one_day = load_trades_zip(path_trades, symbol, date)
     pickle.dump(trades_one_day, open('trades_one_day.p', 'wb'))
 
-
+# Load pickle data
 def load_pickle_data():
     lob_1_one_day = pickle.load( open('lob_1_one_day.p', 'rb'))
     cancellations_one_day = pickle.load( open('cancellations_one_day.p', 'rb'))
@@ -31,12 +32,11 @@ def load_pickle_data():
     trades_one_day = pickle.load(open('trades_one_day.p', 'rb'))
     return (lob_1_one_day, cancellations_one_day, trades_one_day)
 
+# Fundamental functions for time series in high frequency
 def drop_rep(series):
     return series.groupby(series.index).last()
-
 def to_resolution(t, dt):
     return np.ceil(t/dt)*dt
-
 def to_reg_grid(s, dt):
     t0 = np.datetime64(0,'D')
     index = pd.Index(to_resolution(s.index.values - t0, dt) + t0, name = s.index.name)
@@ -44,44 +44,47 @@ def to_reg_grid(s, dt):
     return pd.Series(s[r].values, r.index, name=s.name)
 
 
+
+# Market feature: imbalance
 def get_imbalance(quotes):
     imb = quotes[['Bid Volume0', 'Ask Volume0']]
     imb_num = imb.apply(lambda x: x[1] - x[0], axis=1)
     imb_den = imb.apply(lambda x: x[0] + x[1], axis=1)
-    imbalance = pd.Series(imb_num.div(imb_den,axis='index')).drop_duplicates().dropna()
+    imbalance = pd.Series(imb_num.div(imb_den,axis='index'))#.drop_duplicates().dropna()
     return imbalance
 
+
+# Plot functions
 def plot_imbalance_one_day():
-    plt.figure()
-    lob, cancellations, trades = load_pickle_data()
+    lob, cancellations, trades = load_pickle_data() # Load data
+    fig = plt.figure()
     get_imbalance(lob).plot()
-    plt.show()
+    return fig
 
 def plot_imbalance_reg_grid(Time):
-    plt.figure()
-    lob, cancellations, trades = load_pickle_data()
+    lob, cancellations, trades = load_pickle_data() # Load data
+    fig = plt.figure()
     to_reg_grid(drop_rep(get_imbalance(lob)),pd.to_timedelta(Time)).plot()
-    plt.show()
+    return fig
 
 def plot_lob_one_day():
-    plt.figure()
-    lob, cancellations, trades = load_pickle_data()
-    lob.set_index('Report Time', inplace=True)
-    lob[['Bid Price0','Ask Price0']].plot()
-    plt.show()
+    lob, cancellations, trades = load_pickle_data() # Load data
+    fig = plt.figure()
+    lob['Bid Price0'].plot()
+    lob['Ask Price0'].plot()
+    return fig
 
 def plot_lob_reg_grid(Time):
-    plt.figure()
-    lob, cancellations, trades = load_pickle_data()
-    lob.set_index('Report Time', inplace=True)
+    lob, cancellations, trades = load_pickle_data() # Load data
+    fig = plt.figure()
     to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot()
     to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)).plot()
-    plt.show()
+    return fig
 
 def plot_lob_and_imbalance_reg_grid(Time):
 
-    lob, cancellations, trades = load_pickle_data()
-    # Plot Bid and Ask prices with imbalance
+    lob, cancellations, trades = load_pickle_data() # Load data
+    # Plot Bid and Ask prices with imbalance. Two axes
     fig1 = plt.figure()
     ax1 = fig1.add_subplot(111)
     ax2 = ax1.twinx()
@@ -94,12 +97,30 @@ def plot_lob_and_imbalance_reg_grid(Time):
     ax1.plot(to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)), 'b')
     ax1.plot(to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)),'r')
     ax1.set_ylabel('Bid Price (blue)/Ask Price (red)', color='k')
-    # Plot Trades
-    trades_reg_grid = to_reg_grid(drop_rep(trades["Price"]), pd.to_timedelta(Time))
-    fig2 = plt.figure()
-    plt.plot(trades_reg_grid, 'ko-')
 
-    return fig1, fig2
+    return fig1
+
+# Join Lob and Trades
+def plot_lob_trades_imbalance(lob, trades):
+    lob, cancellations, trades = load_pickle_data() # Load data
+    spread = lob["Ask Price0"] - lob["Bid Price0"]
+    lob = lob[spread > 0 & ( spread < 5*spread.median())]
+    lob_trade = lob.join(trades[["Price", "Buy Broker", "Sell Broker"]], how='outer')
+    imbalance = drop_rep(get_imbalance(lob_trade))
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(111)
+    ax2 = ax1.twinx()
+
+    ax1.plot(drop_rep(lob_trade["Bid Price0"]),linewidth=1)
+    ax1.plot(drop_rep(lob_trade["Ask Price0"]),linewidth=1)
+    ax1.plot(drop_rep(lob_trade["Price"]),'k*', linewidth=0.1)
+    ax1.set_ylabel('Bid Price (blue)/Ask Price (red)/Trades (black)', color='k')
+
+    ax2.plot(imbalance,'g-', linewidth=1)
+    ax2.set_ylabel('Imbalance', color='g')
+
+    return fig
 
 ###################################TESTING AREA####################################################
 path_lob ='/home/evanged/Dropbox/Work-Research/Finance/LOB Study Data/QuotesByLevel/'
@@ -116,9 +137,9 @@ i = 0
 lob, cancellations, trades = load_pickle_data()
 #plot_imbalance_one_day()
 
-#plot_imbalance_reg_grid('10m')
-#plot_lob_one_day()
-#plot_lob_reg_grid('10m')
-fig_lob_imb, fig_trades = plot_lob_and_imbalance_reg_grid('30m')
-fig_lob_imb.show()
-fig_trades.show()
+#fig_imb = plot_imbalance_reg_grid('10m'); fig_imb.show()
+#fig_lob = plot_lob_one_day(); fig_lob.show()
+#fig_lob_reg_grid = plot_lob_reg_grid('10m'); fig_lob_reg_grid.show()
+#fig_lob_imb = plot_lob_and_imbalance_reg_grid('5m'); fig_lob_imb.show()
+fig_lob_trades = plot_lob_trades_imbalance(lob, trades); fig_lob_trades.show()
+#lob_trades_spread = plot_lob_and_trades_imbalance(lob, trades);

@@ -15,18 +15,29 @@ cancelled_and_LO_columns = ["Time Frame",
                             "Execution Quantity",
                             "Seq Order Number",
                             "Broker"]
+trades_columns = ['Time Frame',
+                  'Report Time',
+                  'Price',
+                  'Volume',
+                  'Buy Seq Ord Num',
+                  'Buy Agressor',
+                  'Sell Seq Ord Num',
+                  'Sell Agressor',
+                  'Cross Indicator',
+                  'Buy Broker',
+                  'Sell Broker']
 
-trades_columns = ["Time Frame",
-		  "Report Time",
-		  "Price",
-		  "Volume",
-		  "Buy Seq Order Number",
-		  "Buy Agressor",
-		  "Sell Seq Order Number",
-		  "Sell Agressor",
-		  "Cross Indicator",
-		  "Buy Broker",
-		  "Sell Broker"]
+#trades_columns = ["Time Frame",
+#		  "Report Time",
+#		  "Price",
+#		  "Volume",
+#		  "Buy Seq Order Number",
+#		  "Buy Agressor",
+#		  "Sell Seq Order Number",
+#		  "Sell Agressor",
+#		  "Cross Indicator",
+#		  "Buy Broker",
+#		  "Sell Broker"]
 
 def loadstr(filename):
     dat = np.loadtxt(filename, dtype=np.str_, delimiter=';')
@@ -45,7 +56,9 @@ def load_LONEW_zip(path,symbol,date):
         zip = zipfile.ZipFile(zip_name)
         file = symbol + "_LONEW_" + date.strftime("%Y%m%d") + ".txt"
         if (file in [i.filename for i in zip.filelist]):
-            x = pd.DataFrame(loadstr(zip.open(file, 'r')))
+            #x = pd.DataFrame(loadstr(zip.open(file, 'r')))
+            x = pd.DataFrame(loadstr(zip.open(file, 'r')),sep=';')
+            x = pd.read_csv(loadstr(zip.open(file, 'r')),sep=';')
             x.columns = cancelled_and_LO_columns
             x["Order Quantity"] = pd.to_numeric(x["Order Quantity"],errors='coerce')
             x["Execution Quantity"] = pd.to_numeric(x["Execution Quantity"],errors='coerce')
@@ -62,7 +75,8 @@ def load_cancelled_order_zip(path,symbol,date):
         zip = zipfile.ZipFile(zip_name)
         file = symbol + "_CA_" + date.strftime("%Y%m%d") + ".txt"
         if (file in [i.filename for i in zip.filelist]):
-            x = pd.DataFrame(loadstr(zip.open(file, 'r')))
+            #x = pd.DataFrame(loadstr(zip.open(file, 'r')))
+            x = pd.read_csv(loadstr(zip.open(file, 'r')),sep=';')
             x.columns = cancelled_and_LO_columns
             x["Order Quantity"] = pd.to_numeric(x["Order Quantity"],errors='coerce')
             x["Execution Quantity"] = pd.to_numeric(x["Execution Quantity"],errors='coerce')
@@ -79,7 +93,8 @@ def load_trades_zip(path,symbol,date):
         zip = zipfile.ZipFile(zip_name)
         file = symbol + "_NEG_" + date.strftime("%Y%m%d") + ".txt"
         if (file in [i.filename for i in zip.filelist]):
-            x = pd.DataFrame(loadstr(zip.open(file, 'r')))
+            #x = pd.DataFrame(loadstr(zip.open(file, 'r')))
+            x = pd.read_csv(zip.open(file, 'r'),sep=';')
             x.columns = trades_columns
             x["Volume"] = pd.to_numeric(x["Volume"],errors='coerce')
             x["Price"] = pd.to_numeric(x["Price"],errors='coerce')
@@ -166,4 +181,4 @@ def load_lob_zip(path,symbol,date,depth):
     mlob["Report Time"] = pd.to_datetime(mlob["Report Time"])
     mlob.set_index("Report Time", inplace=True)
 
-    return mlob
+    return mlob_dict

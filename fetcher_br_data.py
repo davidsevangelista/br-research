@@ -76,7 +76,7 @@ def load_cancelled_order_zip(path,symbol,date):
         file = symbol + "_CA_" + date.strftime("%Y%m%d") + ".txt"
         if (file in [i.filename for i in zip.filelist]):
             #x = pd.DataFrame(loadstr(zip.open(file, 'r')))
-            x = pd.read_csv(loadstr(zip.open(file, 'r')),sep=';')
+            x = pd.read_csv(loadstr(zip.open(file, 'r')), sep=';')
             x.columns = cancelled_and_LO_columns
             x["Order Quantity"] = pd.to_numeric(x["Order Quantity"],errors='coerce')
             x["Execution Quantity"] = pd.to_numeric(x["Execution Quantity"],errors='coerce')
@@ -174,11 +174,19 @@ def load_lob_zip(path,symbol,date,depth):
         else:
             bid_qty = []
 
-    lob_dict= {'Bid Price': bid_price, 'Ask Price': offer_price, 'Bid Volume':bid_qty, 'Ask Volume':offer_qty}
-    mlob_price = pd.merge(lob_dict['Bid Price'], lob_dict['Ask Price'], on=["Report Time", 'Time Frame'],how='outer').fillna(method='ffill')
-    mlob_volume = pd.merge(lob_dict['Bid Volume'], lob_dict['Ask Volume'], on=["Report Time", 'Time Frame'],how='outer').fillna(method='ffill')
+    lob_dict= {'Bid Price': bid_price, 'Ask Price': offer_price, \
+               'Bid Volume':bid_qty, 'Ask Volume':offer_qty}
+    mlob_price = pd.merge(lob_dict['Bid Price'], lob_dict['Ask Price'], \
+            on=["Report Time", 'Time Frame'],how='outer').fillna(method='ffill')
+    mlob_volume = pd.merge(lob_dict['Bid Volume'], lob_dict['Ask Volume'], \
+            on=["Report Time", 'Time Frame'],how='outer').fillna(method='ffill')
     mlob = pd.merge(mlob_price, mlob_volume,how='inner').fillna(method='ffill').dropna()
+
     mlob["Report Time"] = pd.to_datetime(mlob["Report Time"])
     mlob.set_index("Report Time", inplace=True)
 
-    return mlob_dict
+    spread = mlob["Ask Price0"] - mlob["Bid Price0"]
+    mlob = mlob[(spread > 0) & (spread < 5*spread.median())]
+
+
+    return mlob

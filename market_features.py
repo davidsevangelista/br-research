@@ -7,6 +7,28 @@ style.use('fivethirtyeight')
 
 from fetcher_br_data import *
 
+# Params for plot in LaTeX style
+import pylab
+from pylab import sqrt
+
+fig_width_pt = 246.0 # get this from LaTeX using \showthe\columnwidth
+inches_per_pt = 1.0/72.27                   # Convert pt to inch
+golden_mean = (sqrt(5)-1.0)/2               # Aesthetic ratio
+fig_width = fig_width_pt*inches_per_pt      # width in inches
+fig_height = fig_width*golden_mean          # height in inches
+fig_size= [fig_width, fig_height]
+params = {'backend': 'ps',
+          'axes.labelsize': 10,
+          'font.size': 10,
+          'legend.fontsize': 10,
+          'xtick.labelsize': 8,
+          'ytick.labelsize': 8,
+          'text.usetex': True,
+          'figure.figsize': fig_size}
+pylab.rcParams.update(params)
+
+fig_path = '/home/evanged/website_HUGO/personalwebsite-hugo/static/img'
+
 # Write pickle data
 def write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date):
     # Quotes
@@ -14,16 +36,16 @@ def write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date):
     pickle.dump(lob_1_one_day ,open('lob_1_one_day.p', 'wb'))
 
     # Cancelations
-    cancellations_one_day = load_cancelled_order_zip(path_cancelled, symbol, date)
-    pickle.dump(cancellations_one_day ,open('cancellations_one_day.p', 'wb'))
+    #cancellations_one_day = load_cancelled_order_zip(path_cancelled, symbol, date)
+    #pickle.dump(cancellations_one_day ,open('cancellations_one_day.p', 'wb'))
 
     # Limit Orders
     #limit_orders_one_day = load_LONEW_zip(path_LO, symbol, date[i])
     #pickle.dump(limit_orders_one_day, open('limit_orders_one_day.p', 'wb'))
 
     # Trades
-    trades_one_day = load_trades_zip(path_trades, symbol, date)
-    pickle.dump(trades_one_day, open('trades_one_day.p', 'wb'))
+    #trades_one_day = load_trades_zip(path_trades, symbol, date)
+    #pickle.dump(trades_one_day, open('trades_one_day.p', 'wb'))
 
 # Load pickle data
 def load_pickle_data():
@@ -101,12 +123,9 @@ def plot_lob_and_imbalance_reg_grid(Time):
 
 # Join Lob, Trades and order imbalance
 def plot_lob_trades_imbalance(lob, trades):
-    lob, cancellations, trades = load_pickle_data() # Load data
-    spread = lob["Ask Price0"] - lob["Bid Price0"]
-    lob = lob[(spread > 0) & (spread < 5*spread.median())]
-
-    # Join lob and trades in the same time 
-    lob_trade = drop_rep(lob.join(trades[["Price", "Buy Broker", "Sell Broker"]], how='outer'))
+    # Join lob and trades in the same time
+    lob_trade = drop_rep(lob.join(trades[["Price", "Volume", \
+                        "Buy Broker", "Sell Broker"]], how='outer'))
 
     trade_bid_side = lob_trade[lob_trade["Price"] == lob_trade["Bid Price0"]]
     trade_ask_side = lob_trade[lob_trade["Price"] == lob_trade["Ask Price0"]]
@@ -123,9 +142,13 @@ def plot_lob_trades_imbalance(lob, trades):
     ax1.plot(lob_trade["Bid Price0"],linewidth=1)
     ax1.plot(lob_trade["Ask Price0"],linewidth=1)
     ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Bid"], \
-            s=lob_trade["Bid Volume0"]/lob_trade["Bid Volume0"].min())
+            s=2*lob_trade["Volume"], color='blue',  alpha=1)
     ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Ask"], \
-            s=lob_trade["Ask Volume0"]/lob_trade["Ask Volume0"].min())
+            s=2*lob_trade["Volume"], color='red', alpha=1)
+    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Bid"], \
+            s=2*lob_trade["Bid Volume0"],color='blue', alpha=0.2)
+    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Ask"], \
+            s=2*lob_trade["Ask Volume0"],color='red', alpha=0.2)
 
 
     ax1.set_ylabel('Bid Price (blue)/Ask Price (red)/Trades (black)', color='k')
@@ -165,7 +188,7 @@ def animation_lob_trades_imbalance(lob, trades, numframes):
     spread = lob["Ask Price0"] - lob["Bid Price0"]
     lob = lob[(spread > 0) & (spread < 5*spread.median())]
 
-    # Join lob and trades in the same time 
+    # Join lob and trades in the same time
     lob_trade = drop_rep(lob.join(trades[["Price", "Buy Broker", "Sell Broker"]], how='outer'))
 
     trade_bid_side = lob_trade[lob_trade["Price"] == lob_trade["Bid Price0"]]
@@ -201,7 +224,7 @@ def plot_lob_trades_imbalance_reg_grid(lob, trades, Time):
     lob, cancellations, trades = load_pickle_data() # Load data
     spread = lob["Ask Price0"] - lob["Bid Price0"]
     lob = lob[(spread > 0) & (spread < 5*spread.median())]
-    
+
     lob_trade = lob.join(trades[["Price", "Buy Broker", "Sell Broker"]], how='outer')
     imbalance = drop_rep(get_imbalance(lob_trade))
     imbalance = imbalance[(imbalance < -0.95) | (imbalance > 0.95)]

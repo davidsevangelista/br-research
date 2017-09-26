@@ -11,23 +11,25 @@ from fetcher_br_data import *
 import pylab
 from pylab import sqrt
 
-fig_width_pt = 246.0 # get this from LaTeX using \showthe\columnwidth
+factor=10 # 1 is for latex image in latex file
+
+fig_width_pt = 246.0*factor # get this from LaTeX using \showthe\columnwidth
 inches_per_pt = 1.0/72.27                   # Convert pt to inch
 golden_mean = (sqrt(5)-1.0)/2               # Aesthetic ratio
 fig_width = fig_width_pt*inches_per_pt      # width in inches
 fig_height = fig_width*golden_mean          # height in inches
 fig_size= [fig_width, fig_height]
 params = {'backend': 'ps',
-          'axes.labelsize': 10,
-          'font.size': 10,
-          'legend.fontsize': 10,
-          'xtick.labelsize': 8,
-          'ytick.labelsize': 8,
+          'axes.labelsize': 10*(factor/2),
+          'font.size': 10*(factor/2),
+          'legend.fontsize': 10*(factor/2),
+          'xtick.labelsize': 8*(factor/2),
+          'ytick.labelsize': 8*(factor/2),
           'text.usetex': True,
           'figure.figsize': fig_size}
 pylab.rcParams.update(params)
 
-fig_path = '/home/evanged/website_HUGO/personalwebsite-hugo/static/img'
+fig_path = '/home/evanged/website_HUGO/personalwebsite-hugo/static/img/'
 
 # Write pickle data
 def write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date):
@@ -98,7 +100,7 @@ def plot_imbalance_reg_grid(Time):
 def plot_lob_reg_grid(Time):
     lob, cancellations, trades = load_pickle_data() # Load data
     fig = plt.figure()
-    to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot()
+#    to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot()
     to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)).plot()
     return fig
 
@@ -119,106 +121,136 @@ def plot_lob_and_imbalance_reg_grid(Time):
     ax1.plot(to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)),'r')
     ax1.set_ylabel('Bid Price (blue)/Ask Price (red)', color='k')
 
+
     return fig
 
-# Join Lob, Trades and order imbalance
-def plot_lob_trades_imbalance(lob, trades):
-    # Join lob and trades in the same time
+def plot_spread_midprice(lob):
+    spread = lob[["Ask Price0", "Bid Price0"]].apply(lambda x: x[0]-x[1], axis=1)
+    spread_tick = spread/spread.min()
+    mid_price = lob[["Ask Price0", "Bid Price0"]].mean(axis=1)
+
+
+    fig = pylab.figure()
+    ax1 = fig.add_subplot(111)
+    ax2 = ax1.twinx()
+    ax2.plot(spread,'r',label='Spread')
+    ax2.set_ylabel('Spread')
+    ax2.set_ylim([0,10])
+    #fig2 = plt.figure
+    ax1.plot(mid_price, 'b', label='Mid-price')
+    ax1.set_ylabel('Mid Price')
+    pylab.title('Spread in ticks and mid-price')
+    lines = ax1.get_lines() + ax2.get_lines()
+    pylab.legend(lines, [l.get_label() for l in lines], loc='upper center')
+    pylab.savefig(fig_path + 'plot_sread_midprice.png')
+    return fig
+
+
+def regime_imbalance(lob, trades):
+
+    # Join lob and trades at the same time stamp
     lob_trade = drop_rep(lob.join(trades[["Price", "Volume", \
                         "Buy Broker", "Sell Broker"]], how='outer'))
+    # Separate trades by side
+    trade_sell_mo = lob_trade[lob_trade["Price"] == lob_trade["Bid Price0"]]
+    trade_buy_mo = lob_trade[lob_trade["Price"] == lob_trade["Ask Price0"]]
 
-    trade_bid_side = lob_trade[lob_trade["Price"] == lob_trade["Bid Price0"]]
-    trade_ask_side = lob_trade[lob_trade["Price"] == lob_trade["Ask Price0"]]
-
-    lob_trade = lob_trade.join(trade_bid_side["Price"], how='outer', rsuffix=' Trade'+ ' Bid')
-    lob_trade = lob_trade.join(trade_ask_side["Price"], how='outer', rsuffix=' Trade'+ ' Ask')
-
+    # Join lob with buy and sell market orders (MO)
+    lob_trade = lob_trade.join(trade_sell_mo["Price"], how='outer', rsuffix=' Trade'+ ' Sell MO')
+    lob_trade = lob_trade.join(trade_buy_mo["Price"], how='outer', rsuffix=' Trade'+ ' Buy MO')
     imbalance = get_imbalance(lob_trade)
-    imbalance = imbalance[(imbalance < -0.95)]# & (imbalance > 0.5) ]
+    regimes = ['Regime 1',
+               'Regime 2',
+               'Regime 3',
+               'Regime 4',
+               'Regime 5']
 
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111)
-    #ax2 = ax1.twinx()
-    ax1.plot(lob_trade["Bid Price0"],linewidth=1)
-    ax1.plot(lob_trade["Ask Price0"],linewidth=1)
-    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Bid"], \
-            s=2*lob_trade["Volume"], color='blue',  alpha=1)
-    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Ask"], \
-            s=2*lob_trade["Volume"], color='red', alpha=1)
-    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Bid"], \
-            s=2*lob_trade["Bid Volume0"],color='blue', alpha=0.2)
-    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Ask"], \
-            s=2*lob_trade["Ask Volume0"],color='red', alpha=0.2)
+    # Ajust lob and trades to accomodate bins by regime
+    bins = [-1, -0.5, -0.2, 0.2, 0.6, 1]
+    imbalance_reg = pd.cut(imbalance, bins, labels = regimes)
+    imbalance_regime = pd.DataFrame(imbalance_reg, columns=["Regime"])
+    lob_imb_reg = lob_trade.join(imbalance_regime, how='outer')
 
+    # Count number and percentage of sell MO by(conditional to) imbalance regime
+    n_sell_MO = [lob_imb_reg["Price Trade Sell MO"][\
+            lob_imb_reg["Regime"]== reg].count() for reg in regimes]
+    perc_sell_MO = n_sell_MO/sum(n_sell_MO)
 
-    ax1.set_ylabel('Bid Price (blue)/Ask Price (red)/Trades (black)', color='k')
+    # Count number and percentage of buy MO by(conditional to) imbalance regime
+    n_buy_MO = [lob_imb_reg["Price Trade Buy MO"][\
+            lob_imb_reg["Regime"]== reg].count() for reg in regimes]
+    perc_buy_MO = n_buy_MO/sum(n_buy_MO)
 
-    #ax2.plot(imbalance,'g-', linewidth=1)
-    #ax2.set_ylabel('Imbalance', color='g')
+    # Total number of trades conditional to imbalance regime
+    #n_total_MO = n_sell_MO + n_buy_MO
+    #perc_total_MO = perc_sell_MO + perc_buy_MO
 
-    return fig, lob_trade
+    n_total_MO = [lob_imb_reg["Price"][\
+            lob_imb_reg["Regime"]== reg].count() for reg in regimes]
+    perc_total_MO = n_total_MO/sum(n_total_MO)
 
-# Functions for animation
+    # Plot results
+    fig, ax = plt.subplots()
+    index = np.arange(len(regimes))
+    bar_width = 1/5
+    opacity = 0.5
 
-#def main():
-#    numframes = 100
-#    numpoints = 10
-#    color_data = np.random.random((numframes, numpoints))
-#    x, y, c = np.random.random((3, numpoints))
-#
-#    fig = plt.figure()
-#    scat1 = plt.scatter(x, y, c=c, s=100)
-#    scat2 = plt.scatter(x, y, c=c, s=100)
-#
-#    ani = animation.FuncAnimation(fig, update_plot, frames=xrange(numframes),
-#                                  fargs=(color_data, scat))
-#    plt.show()
+    buy_regimes = plt.bar(index, perc_buy_MO, bar_width,
+                          alpha=opacity,
+                          color='b',
+                          label='Buy market orders')
 
-def update_plot(i, data, scat4):#, scat2, scat3, scat4):
-    #scat1.set_array(np.array(data[i]))
-    #scat2.set_array(np.array(data[i]))
-    #scat3.set_array(np.array(data[i]))
-    scat4.set_array(np.array(data[i]))
-    return scat4, # scat2, scat3, scat4
+    sell_regimes = plt.bar(index + bar_width, perc_sell_MO, bar_width,
+                          alpha=opacity,
+                          color='r',
+                          label='Sell market orders')
 
-
-# Animation Lob and Trades proportional to volume
-def animation_lob_trades_imbalance(lob, trades, numframes):
-    lob, cancellations, trades = load_pickle_data() # Load data
-    spread = lob["Ask Price0"] - lob["Bid Price0"]
-    lob = lob[(spread > 0) & (spread < 5*spread.median())]
-
-    # Join lob and trades in the same time
-    lob_trade = drop_rep(lob.join(trades[["Price", "Buy Broker", "Sell Broker"]], how='outer'))
-
-    trade_bid_side = lob_trade[lob_trade["Price"] == lob_trade["Bid Price0"]]
-    trade_ask_side = lob_trade[lob_trade["Price"] == lob_trade["Ask Price0"]]
-
-    lob_trade = lob_trade.join(trade_bid_side["Price"], how='outer', rsuffix=' Trade'+ ' Bid')
-    lob_trade = lob_trade.join(trade_ask_side["Price"], how='outer', rsuffix=' Trade'+ ' Ask')
-
-    imbalance = get_imbalance(lob_trade)
-    imbalance = imbalance[(imbalance < -0.95)]# & (imbalance > 0.5) ]
-
-    fig = plt.figure()
-    ax1 = fig.add_subplot(111)
-    #ax2 = ax1.twinx()
-    #scat1 = ax1.plot(lob_trade["Bid Price0"],linewidth=1)
-    #scat2 = ax1.plot(lob_trade["Ask Price0"],linewidth=1)
-    #scat3 = ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Bid"], \
-    #        s=lob_trade["Bid Volume0"]/lob_trade["Bid Volume0"].min())
-    scat4 = ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Ask"], \
-            s=lob_trade["Ask Volume0"]/lob_trade["Ask Volume0"].min())
-    ax1.set_ylabel('Bid Price (blue)/Ask Price (red)/Trades (black)', color='k')
-
-    ani = animation.FuncAnimation(fig, update_plot, frames=range(numframes),
-                                  fargs=(lob_trade, scat4))#, scat2, scat3, scat4))
+    total_regimes = plt.bar(index + 2*bar_width, perc_total_MO, bar_width,
+                          alpha=opacity,
+                          color='g',
+                          label='Total')
+    plt.xlabel('Regime')
+    plt.ylabel('\% Market Orders')
+    plt.title('Percentage of market orders conditioned to imbalance')
+    plt.xticks(index + 2*bar_width, ('1','2','3','4','5'))
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(fig_path + 'plot_percentage_imbalance_regimes.png')
     plt.show()
 
-    #ax2.plot(imbalance,'g-', linewidth=1)
-    #ax2.set_ylabel('Imbalance', color='g')
 
-    #return fig, lob_trade
+# Join Lob, Trades and order imbalance
+def plot_lob_trades_volume(lob, trades):
+    # Join lob and trades at the same time stamp
+    lob_trade = drop_rep(lob.join(trades[["Price", "Volume", \
+                        "Buy Broker", "Sell Broker"]], how='outer'))
+    # Separate trades by side
+    trade_bid_side = lob_trade[lob_trade["Price"] == lob_trade["Bid Price0"]]
+    trade_ask_side = lob_trade[lob_trade["Price"] == lob_trade["Ask Price0"]]
+
+    lob_trade = lob_trade.join(trade_bid_side["Price"], how='outer', rsuffix=' Trade'+ ' Sell MO')
+    lob_trade = lob_trade.join(trade_ask_side["Price"], how='outer', rsuffix=' Trade'+ ' Buy MO')
+
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(111)
+    ax2 = ax1.twinx()
+    ax1.plot(lob_trade["Bid Price0"],linewidth=1)
+    ax1.plot(lob_trade["Ask Price0"],linewidth=1)
+    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Sell MO"], \
+            s=2*lob_trade["Volume"], color='blue',  alpha=1)
+    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Buy MO"], \
+            s=2*lob_trade["Volume"], color='red', alpha=1)
+    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Sell MO"], \
+            s=2*lob_trade["Bid Volume0"],color='blue', alpha=0.2)
+    ax1.scatter(lob_trade.index.values,  lob_trade["Price Trade Buy MO"], \
+            s=2*lob_trade["Ask Volume0"],color='red', alpha=0.2)
+
+    ax1.set_ylabel('Bid Price (blue)/Ask Price (red)/Trades (black)', color='k')
+    pylab.show()
+    pylab.savefig(fig_path + 'plot_lob_trades_volume_prop.png')
+
+
 
 def plot_lob_trades_imbalance_reg_grid(lob, trades, Time):
     lob, cancellations, trades = load_pickle_data() # Load data
@@ -262,7 +294,8 @@ lob, cancellations, trades = load_pickle_data()
 #fig_lob = plot_lob_one_day(); fig_lob.show()
 #fig_lob_reg_grid = plot_lob_reg_grid('10m'); fig_lob_reg_grid.show()
 #fig_lob_imb = plot_lob_and_imbalance_reg_grid('5m'); fig_lob_imb.show()
-fig_lob_trades_imbalance, lob_trade = plot_lob_trades_imbalance(lob, trades); fig_lob_trades_imbalance.show()
+#plot_lob_trades_volume(lob, trades); fig_lob_trades_volume.show()
 #fig_lob_trades_imbalance_reg_grid = plot_lob_trades_imbalance_reg_grid(lob, trades, '10m'); fig_lob_trades_imbalance_reg_grid.show()
 
-#animation_lob_trades_imbalance(lob, trades, 100)
+#res = plot_spread_midprice(lob)
+regime_imbalance(lob, trades)

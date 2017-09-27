@@ -11,7 +11,7 @@ from fetcher_br_data import *
 import pylab
 from pylab import sqrt
 
-factor=10 # 1 is for latex image in latex file
+factor=5 # 1 is for latex image in latex file
 
 fig_width_pt = 246.0*factor # get this from LaTeX using \showthe\columnwidth
 inches_per_pt = 1.0/72.27                   # Convert pt to inch
@@ -38,16 +38,16 @@ def write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date):
     pickle.dump(lob_1_one_day ,open('lob_1_one_day.p', 'wb'))
 
     # Cancelations
-    #cancellations_one_day = load_cancelled_order_zip(path_cancelled, symbol, date)
-    #pickle.dump(cancellations_one_day ,open('cancellations_one_day.p', 'wb'))
+    cancellations_one_day = load_cancelled_order_zip(path_cancelled, symbol, date)
+    pickle.dump(cancellations_one_day ,open('cancellations_one_day.p', 'wb'))
 
     # Limit Orders
     #limit_orders_one_day = load_LONEW_zip(path_LO, symbol, date[i])
     #pickle.dump(limit_orders_one_day, open('limit_orders_one_day.p', 'wb'))
 
     # Trades
-    #trades_one_day = load_trades_zip(path_trades, symbol, date)
-    #pickle.dump(trades_one_day, open('trades_one_day.p', 'wb'))
+    trades_one_day = load_trades_zip(path_trades, symbol, date)
+    pickle.dump(trades_one_day, open('trades_one_day.p', 'wb'))
 
 # Load pickle data
 def load_pickle_data():
@@ -171,6 +171,7 @@ def get_lob_trade_imbalance(lob, trades):
     imbalance = pd.DataFrame(get_imbalance(lob))
     imbalance.columns=['Imbalance']
     lob_trade = lob_trade.join(imbalance, how = 'outer')
+    lob_trade['Imbalance'] = lob_trade['Imbalance'].fillna(method='ffill')
 
     # Join lob with imbalance when trade occurs
     imbalance_trade = lob_trade.dropna(subset=['Price'])
@@ -228,7 +229,8 @@ def regime_imbalance(lob, trades):
     lob_trade = get_lob_trade_imbalance(lob, trades)
 
     # Get imbalance
-    imbalance = get_imbalance(lob_trade)
+    imbalance = lob_trade['Imbalance']
+    #pd.Series(lob_trade['Imbalance'])#['Imbalance Trade']
     regimes = ['Regime 1',
                'Regime 2',
                'Regime 3',
@@ -238,7 +240,10 @@ def regime_imbalance(lob, trades):
     # Ajust lob and trades to accomodate bins by regime
     #bins = [-1, -0.5, -0.2, 0.2, 0.6, 1]
     imbalance_reg = pd.cut(imbalance, len(regimes), retbins=True, labels = regimes)
-    imbalance_regime = pd.DataFrame(imbalance_reg[0], columns=["Regime"])
+    imbalance_regime = pd.DataFrame(imbalance_reg[0])
+    imbalance_regime.columns=["Regime"]
+
+    # Join lob_trade with Regime
     lob_imb_reg = lob_trade.join(imbalance_regime, how='outer')
 
     # Count number and percentage of sell MO by(conditional to) imbalance regime
@@ -262,7 +267,7 @@ def regime_imbalance(lob, trades):
     # Plot results
     fig, ax = plt.subplots()
     index = np.arange(len(regimes))
-    bar_width = 1/5
+    bar_width = 1/8
     opacity = 0.5
 
     buy_regimes = plt.bar(index, perc_buy_MO, bar_width,
@@ -291,16 +296,8 @@ def regime_imbalance(lob, trades):
 
 # Join Lob, Trades and order imbalance
 def plot_lob_trades_volume(lob, trades):
-    # Join lob and trades at the same time stamp
-    lob_trade = drop_rep(lob.join(trades[["Price", "Volume", \
-                        "Buy Broker", "Sell Broker"]], how='outer'))
-    # Separate trades by side
-    trade_bid_side = lob_trade[lob_trade["Price"] == lob_trade["Bid Price0"]]
-    trade_ask_side = lob_trade[lob_trade["Price"] == lob_trade["Ask Price0"]]
 
-    lob_trade = lob_trade.join(trade_bid_side["Price"], how='outer', rsuffix=' Trade'+ ' Sell MO')
-    lob_trade = lob_trade.join(trade_ask_side["Price"], how='outer', rsuffix=' Trade'+ ' Buy MO')
-
+    lob_trade = get_lob_trade_imbalance(lob, trades)
 
     fig = plt.figure()
     ax1 = fig.add_subplot(111)

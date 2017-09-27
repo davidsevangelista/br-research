@@ -70,16 +70,14 @@ def to_reg_grid(s, dt):
 
 # Market feature: imbalance
 def get_imbalance(quotes):
-    imb = quotes[['Bid Volume0', 'Ask Volume0']]
-    imb_num = imb.apply(lambda x: x[0] - x[1], axis=1)
-    imb_den = imb.apply(lambda x: x[0] + x[1], axis=1)
-    imbalance = pd.Series(imb_num.div(imb_den,axis='index'))#.drop_duplicates().dropna()
+    imb = quotes[['Bid Volume0', 'Ask Volume0']]\
+            .apply(lambda x: (x[0] - x[1])/(x[0] + x[1]), axis=1)
+    imbalance = pd.Series(imb)#.drop_duplicates().dropna()
     return imbalance
 
 
 # Plot functions
-def plot_imbalance_one_day():
-    lob, cancellations, trades = load_pickle_data() # Load data
+def plot_imbalance_one_day(lob, trades):
     fig = plt.figure()
     get_imbalance(lob).plot()
     return fig
@@ -100,9 +98,10 @@ def plot_imbalance_reg_grid(Time):
 def plot_lob_reg_grid(Time):
     lob, cancellations, trades = load_pickle_data() # Load data
     fig = plt.figure()
-#    to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot()
+    to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)).plot()
     to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)).plot()
     return fig
+
 
 def plot_lob_and_imbalance_reg_grid(Time):
 
@@ -121,7 +120,6 @@ def plot_lob_and_imbalance_reg_grid(Time):
     ax1.plot(to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)),'r')
     ax1.set_ylabel('Bid Price (blue)/Ask Price (red)', color='k')
 
-
     return fig
 
 def plot_spread_midprice(lob):
@@ -136,7 +134,6 @@ def plot_spread_midprice(lob):
     ax2.plot(spread,'r',label='Spread')
     ax2.set_ylabel('Spread')
     ax2.set_ylim([0,10])
-    #fig2 = plt.figure
     ax1.plot(mid_price, 'b', label='Mid-price')
     ax1.set_ylabel('Mid Price')
     pylab.title('Spread in ticks and mid-price')
@@ -146,18 +143,91 @@ def plot_spread_midprice(lob):
     return fig
 
 
-def regime_imbalance(lob, trades):
+# Features: imbalance part 2
+def get_lob_trade_imbalance(lob, trades):
 
     # Join lob and trades at the same time stamp
     lob_trade = drop_rep(lob.join(trades[["Price", "Volume", \
                         "Buy Broker", "Sell Broker"]], how='outer'))
+
+    # Fill lob/quotes when trade happens in a time stamp is no available for quotes
+    columns_to_fill = ['Bid Price0', 'Ask Price0',
+                       'Bid Volume0', 'Ask Volume0']
+
+    lob_trade[columns_to_fill] = lob_trade[columns_to_fill].fillna(method='ffill')
     # Separate trades by side
-    trade_sell_mo = lob_trade[lob_trade["Price"] == lob_trade["Bid Price0"]]
-    trade_buy_mo = lob_trade[lob_trade["Price"] == lob_trade["Ask Price0"]]
+    trade_sell_mo = lob_trade[lob_trade["Price"] <= lob_trade["Bid Price0"]]
+    trade_buy_mo = lob_trade[lob_trade["Price"] >= lob_trade["Ask Price0"]]
 
     # Join lob with buy and sell market orders (MO)
-    lob_trade = lob_trade.join(trade_sell_mo["Price"], how='outer', rsuffix=' Trade'+ ' Sell MO')
-    lob_trade = lob_trade.join(trade_buy_mo["Price"], how='outer', rsuffix=' Trade'+ ' Buy MO')
+
+    lob_trade = lob_trade.join(trade_sell_mo["Price"], how='outer', \
+            rsuffix=' Trade Sell MO')
+
+    lob_trade = lob_trade.join(trade_buy_mo["Price"], how='outer', \
+            rsuffix=' Trade Buy MO')
+
+    # Join lob with imbalance
+    imbalance = pd.DataFrame(get_imbalance(lob))
+    imbalance.columns=['Imbalance']
+    lob_trade = lob_trade.join(imbalance, how = 'outer')
+
+    # Join lob with imbalance when trade occurs
+    imbalance_trade = lob_trade.dropna(subset=['Price'])
+    imbalance_trade = pd.DataFrame(imbalance_trade['Imbalance'])
+    imbalance_trade.columns=['Imbalance Trade']
+
+    # Update lob_trade
+    lob_trade = lob_trade.join(imbalance_trade, how='outer')
+
+    # Join imbalance corrensponding to the side of each trade
+        # Buy side
+    volume_when_buy_MO = lob_trade.dropna(subset=\
+            ['Price Trade Buy MO'])[['Ask Volume0', 'Bid Volume0']]
+
+    imbalance_when_buy_MO = pd.DataFrame(volume_when_buy_MO\
+            .apply(lambda x: (x[0] - x[1])/(x[0] + x[1]), axis=1))
+    imbalance_when_buy_MO.columns=['Imbalance Buy MO']
+
+    # Update lob_trade
+    lob_trade = lob_trade.join(imbalance_when_buy_MO, how='outer') #Join
+
+        # Sell side
+    volume_when_sell_MO = lob_trade.dropna(subset=\
+            ['Price Trade Sell MO'])[['Ask Volume0', 'Bid Volume0']]
+
+    imbalance_when_sell_MO = pd.DataFrame(volume_when_sell_MO\
+            .apply(lambda x: (x[0] - x[1])/(x[0] + x[1]), axis=1))
+    imbalance_when_sell_MO.columns=['Imbalance Sell MO']
+
+    # Update lob_trade
+    lob_trade = lob_trade.join(imbalance_when_sell_MO, how='outer') # Join
+
+    return lob_trade
+
+def plot_imbalance_trades(lob, trades):
+    lob_trade_imb = get_lob_trade_imbalance(lob, trades)
+
+
+
+    plt.plot(lob_trade_imb['Imbalance Buy MO'], 'b*', label = 'Buy MO')
+    plt.plot(lob_trade_imb['Imbalance Sell MO'], 'r*', label = 'Sell MO')
+    plt.plot(lob_trade_imb['Imbalance'],'k-', alpha=0.4, label = 'Imbalance')
+    plt.ylabel('Imbalance')
+    plt.legend()
+    plt.title('Order imbalance and market orders')
+    plt.show()
+
+
+
+
+
+def regime_imbalance(lob, trades):
+
+    # Get lob, trade, imbalance, and trades separeted by side (sell MO and buy MO)
+    lob_trade = get_lob_trade_imbalance(lob, trades)
+
+    # Get imbalance
     imbalance = get_imbalance(lob_trade)
     regimes = ['Regime 1',
                'Regime 2',
@@ -166,9 +236,9 @@ def regime_imbalance(lob, trades):
                'Regime 5']
 
     # Ajust lob and trades to accomodate bins by regime
-    bins = [-1, -0.5, -0.2, 0.2, 0.6, 1]
-    imbalance_reg = pd.cut(imbalance, bins, labels = regimes)
-    imbalance_regime = pd.DataFrame(imbalance_reg, columns=["Regime"])
+    #bins = [-1, -0.5, -0.2, 0.2, 0.6, 1]
+    imbalance_reg = pd.cut(imbalance, len(regimes), retbins=True, labels = regimes)
+    imbalance_regime = pd.DataFrame(imbalance_reg[0], columns=["Regime"])
     lob_imb_reg = lob_trade.join(imbalance_regime, how='outer')
 
     # Count number and percentage of sell MO by(conditional to) imbalance regime
@@ -298,4 +368,12 @@ lob, cancellations, trades = load_pickle_data()
 #fig_lob_trades_imbalance_reg_grid = plot_lob_trades_imbalance_reg_grid(lob, trades, '10m'); fig_lob_trades_imbalance_reg_grid.show()
 
 #res = plot_spread_midprice(lob)
-regime_imbalance(lob, trades)
+#regime_imbalance(lob, trades)
+#lob_imb, imblob, imblob_nona = plot_imbalance_trades(lob, trades)
+
+
+
+
+# I have to verify the join.
+# Fix: Fazer quotes repetirem quando
+# ha um trade em um time stamp que nao esta no lob (quotes) mesma ideia com method=ffill

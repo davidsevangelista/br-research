@@ -34,12 +34,12 @@ fig_path = '/home/evanged/website_HUGO/personalwebsite-hugo/static/img/'
 # Write pickle data
 def write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date):
     # Quotes
-    #lob_1_one_day = load_lob_zip(path_lob, symbol, date, depth)
-    #pickle.dump(lob_1_one_day, open('lob_1_one_day.p', 'wb'))
+    lob_1_one_day = load_lob_zip(path_lob, symbol, date, depth)
+    pickle.dump(lob_1_one_day, open('lob_1_one_day.p', 'wb'))
 
     # Cancelations
-    #cancellations_one_day = load_cancelled_order_zip(path_cancelled, symbol, date)
-    #pickle.dump(cancellations_one_day, open('cancellations_one_day.p', 'wb'))
+    cancellations_one_day = load_cancelled_order_zip(path_cancelled, symbol, date)
+    pickle.dump(cancellations_one_day, open('cancellations_one_day.p', 'wb'))
 
     # Limit Orders
     #limit_orders_one_day = load_LONEW_zip(path_LO, symbol, date[i])

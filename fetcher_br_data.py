@@ -99,6 +99,8 @@ def load_trades_zip(path,symbol,date):
             x["Volume"] = pd.to_numeric(x["Volume"],errors='coerce')
             x["Price"] = pd.to_numeric(x["Price"],errors='coerce')
             x["Report Time"] = pd.to_datetime(x["Report Time"])
+            #x["Report Time"] = pd.to_datetime(x['Report Time']).dt.date.unique().tolist()
+
             x.set_index("Report Time", inplace=True)
     return x
 

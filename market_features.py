@@ -11,7 +11,7 @@ from fetcher_br_data import *
 import pylab
 from pylab import sqrt
 
-factor=5 # 1 is for latex image in latex file
+factor=2 # 1 is for latex image in latex file
 
 fig_width_pt = 246.0*factor # get this from LaTeX using \showthe\columnwidth
 inches_per_pt = 1.0/72.27                   # Convert pt to inch
@@ -34,12 +34,12 @@ fig_path = '/home/evanged/website_HUGO/personalwebsite-hugo/static/img/'
 # Write pickle data
 def write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date):
     # Quotes
-    lob_1_one_day = load_lob_zip(path_lob, symbol, date, depth)
-    pickle.dump(lob_1_one_day, open('lob_1_one_day.p', 'wb'))
+    #lob_1_one_day = load_lob_zip(path_lob, symbol, date, depth)
+    #pickle.dump(lob_1_one_day, open('lob_1_one_day.p', 'wb'))
 
     # Cancelations
-    cancellations_one_day = load_cancelled_order_zip(path_cancelled, symbol, date)
-    pickle.dump(cancellations_one_day, open('cancellations_one_day.p', 'wb'))
+    #cancellations_one_day = load_cancelled_order_zip(path_cancelled, symbol, date)
+    #pickle.dump(cancellations_one_day, open('cancellations_one_day.p', 'wb'))
 
     # Limit Orders
     #limit_orders_one_day = load_LONEW_zip(path_LO, symbol, date[i])
@@ -79,27 +79,27 @@ def get_imbalance(quotes):
 def plot_imbalance_one_day(lob, trades):
     fig = plt.figure()
     get_imbalance(lob).plot()
-    return fig
+    plt.show()
 
 def plot_lob_one_day():
     lob, cancellations, trades = load_pickle_data() # Load data
     fig = plt.figure()
     lob['Bid Price0'].plot()
     lob['Ask Price0'].plot()
-    return fig
+    plt.show()
 
 def plot_imbalance_reg_grid(Time):
     lob, cancellations, trades = load_pickle_data() # Load data
     fig = plt.figure()
     to_reg_grid(drop_rep(get_imbalance(lob)),pd.to_timedelta(Time)).plot()
-    return fig
+    plt.show()
 
 def plot_lob_reg_grid(Time):
     lob, cancellations, trades = load_pickle_data() # Load data
     fig = plt.figure()
     to_reg_grid(drop_rep(lob['Bid Price0']), pd.to_timedelta(Time)).plot()
     to_reg_grid(drop_rep(lob['Ask Price0']), pd.to_timedelta(Time)).plot()
-    return fig
+    plt.show()
 
 def plot_lob_and_imbalance_reg_grid(Time):
     lob, cancellations, trades = load_pickle_data() # Load data
@@ -116,8 +116,8 @@ def plot_lob_and_imbalance_reg_grid(Time):
     ax1.plot(to_reg_grid(drop_rep(lob['Bid Price0']),pd.to_timedelta(Time)), 'b')
     ax1.plot(to_reg_grid(drop_rep(lob['Ask Price0']),pd.to_timedelta(Time)),'r')
     ax1.set_ylabel('Bid Price (blue)/Ask Price (red)', color='k')
+    plt.show()
 
-    return fig
 
 def plot_spread_midprice(lob):
     spread = lob[["Ask Price0", "Bid Price0"]].apply(lambda x: x[0]-x[1], axis=1)
@@ -136,23 +136,48 @@ def plot_spread_midprice(lob):
     lines = ax1.get_lines() + ax2.get_lines()
     pylab.legend(lines, [l.get_label() for l in lines], loc='upper center')
     pylab.savefig(fig_path + 'plot_sread_midprice.png')
-    return fig
+    plt.show()
 
 # Features: imbalance part 2
 def get_lob_trade_imbalance(lob, trades):
 
+
     # Join lob and trades at the same time stamp
-    lob_trade = drop_rep(lob.join(trades[["Price", "Volume", \
-                        "Buy Broker", "Sell Broker"]], how='outer'))
+    trades = trades[["Price", "Volume", "Buy Broker", "Sell Broker", 
+                     "Buy Agressor", "Sell Agressor", "Cross Indicator"]]
+    vol_walk = trades.groupby(trades.index)['Volume'].agg(['sum','count'])
+    vol_walk.columns = ['Total Volume', 'Count']
+
+    trades = drop_rep(trades).join(vol_walk) 
+
+    # To compare lob with trades
+    lob = lob.shift(-1)
+    lob_trade = lob.join(trades, how='outer')
+    
+    # This is to exclude auctions and agressive buy and sell at the same RT
+    lob_trade = lob_trade[~( ((lob_trade["Cross Indicator"]==1)
+                             |(lob_trade["Cross Indicator"]==0)) 
+                            & (lob_trade["Buy Agressor"]==2)
+                            & (lob_trade["Sell Agressor"]==2))]
 
     # Fill lob/quotes if trade occurs in a time stamp is no available for quotes
-    columns_to_fill = ['Bid Price0', 'Ask Price0',
-                       'Bid Volume0', 'Ask Volume0']
-    lob_trade[columns_to_fill] = lob_trade[columns_to_fill].fillna(method='ffill')
+    # Maybe if i exclude direct trading, i.e., when Cross Indicator == 1,
+    # I will remove trades happening when there were no LO sitting on the lob
+    # also, with this, I would probably remove the auctions that happens during
+    # the day, usually in the begining or the end of the trading day
+    #columns_to_fill = ['Bid Price0', 'Ask Price0',
+    #                   'Bid Volume0', 'Ask Volume0']
+    #lob_trade[columns_to_fill] = lob_trade[columns_to_fill].fillna(method='ffill')
+
+
+  #  if buy_broker != 'All': # in case of all brokers
+  #      lob_trade = lob_trade[lob_trade['Buy Broker']==buy_broker]
 
     # Separate trades by side
-    trade_sell_mo = lob_trade[lob_trade["Price"] == lob_trade["Bid Price0"]]
-    trade_buy_mo = lob_trade[lob_trade["Price"] == lob_trade["Ask Price0"]]
+
+    trade_buy_mo = lob_trade[(lob_trade["Sell Agressor"]==1) & (lob_trade["Buy Agressor"]==2)]
+    trade_sell_mo = lob_trade[ (lob_trade["Sell Agressor"]==2) & (lob_trade["Buy Agressor"]==1)] 
+
 
     # Join lob with buy and sell market orders (MO)
     lob_trade = lob_trade.join(trade_sell_mo["Price"], how='outer', \
@@ -169,7 +194,7 @@ def get_lob_trade_imbalance(lob, trades):
     lob_trade = lob_trade.join(imbalance, how = 'outer')
 
     # Make sure there is no imbalance with NaN
-    lob_trade['Imbalance'] = lob_trade['Imbalance'].fillna(method='ffill')
+  #  lob_trade['Imbalance'] = lob_trade['Imbalance'].fillna(method='ffill')
 
     # Join lob with imbalance when trade occurs
     imbalance_trade = lob_trade.dropna(subset=['Price'])
@@ -202,6 +227,7 @@ def get_lob_trade_imbalance(lob, trades):
     # Update lob_trade
     lob_trade = lob_trade.join(imbalance_when_sell_MO, how='outer') # Join
 
+    # Maybe I need to improve this part
     # Build imbalance divided by regime
     imbalance = lob_trade['Imbalance']
     regimes = ['Regime 1',
@@ -210,8 +236,9 @@ def get_lob_trade_imbalance(lob, trades):
                'Regime 4',
                'Regime 5']
 
-    # Ajust lob and trades to accomodate bins by regime
-    #bins = [-1, -0.5, -0.2, 0.2, 0.6, 1]
+  #  # Ajust lob and trades to accomodate bins by regime. This is when bins are
+  #  not automated retrieved from pd.cut
+  #  #bins = [-1, -0.5, -0.2, 0.2, 0.6, 1]
 
     # retrive bins automatically: retbins, by regimes
     imbalance_reg = pd.cut(imbalance, len(regimes), retbins=True, labels = regimes)
@@ -243,81 +270,34 @@ def plot_imbalance_trades(lob, trades):
     #plt.savefig(fig_path + 'plot_imbalance_trades.png')
     plt.show()
 
-def imbalance_regime(lob, trades, save=False):
+def imbalance_regime(lob, trades):
     # Get lob, trade, imbalance, and trades separeted by side (sell MO and buy MO)
     lob_imb_reg, imb_bins = get_lob_trade_imbalance(lob, trades)
 
-    regimes = ['Regime 1',
-               'Regime 2',
-               'Regime 3',
-               'Regime 4',
-               'Regime 5']
-
-    # Count number and percentage of sell MO by(conditional to) imbalance regime
-    n_sell_MO = [lob_imb_reg["Price Trade Sell MO"][\
-            lob_imb_reg["Regime"]== reg].count() for reg in regimes]
-    perc_sell_MO = n_sell_MO/sum(n_sell_MO)
-
-    # Count number and percentage of buy MO by(conditional to) imbalance regime
-    n_buy_MO = [lob_imb_reg["Price Trade Buy MO"][\
-            lob_imb_reg["Regime"]== reg].count() for reg in regimes]
-    perc_buy_MO = n_buy_MO/sum(n_buy_MO)
-
-    # Total number of trades conditional to imbalance regime
-    n_total_MO = n_sell_MO + n_buy_MO
-    perc_total_MO = perc_sell_MO + perc_buy_MO
-
-    # Plot results
-    fig, ax = plt.subplots()
-    index = np.arange(len(regimes))
-    bar_width = 1/8
-    opacity = 0.5
-
-    buy_regimes = plt.bar(index, perc_buy_MO, bar_width,
-                          alpha=opacity,
-                          color='b',
-                          label='Buy market orders')
-
-    sell_regimes = plt.bar(index + bar_width, perc_sell_MO, bar_width,
-                          alpha=opacity,
-                          color='r',
-                          label='Sell market orders')
-
-    total_regimes = plt.bar(index + 2*bar_width, perc_total_MO, bar_width,
-                          alpha=opacity,
-                          color='g',
-                          label='Total')
-    plt.xlabel('Regime')
-    plt.ylabel('\% Market Orders')
-    plt.title('Percentage of market orders conditioned to imbalance')
-    plt.xticks(index + 2*bar_width, ('1','2','3','4','5'))
-    plt.legend()
-    plt.tight_layout()
-
-    if save==True:
-        plt.savefig(fig_path + 'plot_percentage_imbalance_regimes.png')
-    #plt.show()
-
-    #def write_table_imbalance_regime(lob,trades):
-
-    #lob_imb_reg = get_lob
-
-    # Arrival rate: counting the time the imbalance spent in each regime
-
+    # I still have to update this part, to avoid the future warning
     aggregation = {'Imbalance Buy MO':{'Num':'count','Mean':'mean'},\
-                  'Imbalance Sell MO':{'Num':'count','Mean':'mean'}}
+                  'Imbalance Sell MO':{'Num':'count','Mean':'mean'},\
+                  'Count':{'Count Orders':'sum'}}
 
     group_regime = lob_imb_reg[['Imbalance Buy MO',\
                                 'Imbalance Sell MO',\
+                                'Count',\
                                 'Regime']].groupby('Regime').agg(aggregation)
 
 
-    total_sum = group_regime.iloc[:, group_regime.columns.get_level_values(1)=='Num'].sum(axis=1)
-    total_mean = group_regime.iloc[:, group_regime.columns.get_level_values(1)=='Mean'].mean(axis=1)
-    total_dict = {'Num':total_sum,'Mean':total_mean}
+    total_sum      = group_regime.iloc[:, group_regime.columns.\
+                     get_level_values(1)=='Num'].sum(axis=1)
+    total_mean     = group_regime.iloc[:, group_regime.columns.\
+                     get_level_values(1)=='Mean'].mean(axis=1)
+    total_num_walk = group_regime.iloc[:,group_regime.columns.\
+                     get_level_values(1)=='Count Orders'].sum(axis=1)
+
+    total_dict = {'Num':total_sum,'Mean':total_mean, 'Count Orders':total_num_walk}
     total = pd.concat(total_dict.values(), keys=total_dict.keys(), axis=1)
 
-    cols = pd.MultiIndex.from_tuples([('Total Imbalance','Num'),('Total Imbalance','Mean')])
+    cols = pd.MultiIndex.from_tuples([('Total Imbalance','Num'), \
+                                      ('Total Imbalance','Mean'),\
+                                      ('Total Imbalance','Count Orders')])
     total = pd.DataFrame(total.values, columns=cols, index=total.index.values)
 
     full_group_regime = group_regime.join(total)
@@ -326,14 +306,24 @@ def imbalance_regime(lob, trades, save=False):
     num_regimes = full_group_regime.columns.get_level_values(1)=='Num'
     full_group_regime.iloc[:,num_regimes].plot(kind='bar',color=['b','r','g'],\
         alpha=0.6, title='Arrival MO Conditional to Imbalance');
+    plt.ylabel('Quantity of Market Orders') 
     plt.legend();
 
+    # Percentage of market orders imbalance
+    fg_regime_perc=full_group_regime.iloc[:,full_group_regime.columns.get_level_values(1)=='Num'].transform(lambda x:100*x/x.sum())
+    fg_regime_perc.columns=fg_regime_perc.columns.droplevel(1)
+    fg_regime_perc.plot(kind='bar', color=['b','r','g'], alpha=0.6,\
+            title='Percentage of Market Orders Conditional to Imbalance')
+    plt.ylabel('\% of Market Orders')
+    plt.legend()
+    plt.show()
 
     # Mean/Average imbalance
     mean_regimes = full_group_regime.columns.get_level_values(1)=='Mean'
     full_group_regime.iloc[:,mean_regimes]\
         .plot(kind='bar',color=['b','r','g'],alpha=0.6, title='Average Imbalance');
     plt.legend();
+    plt.ylabel('Imbalance')
     plt.show()
 
     return full_group_regime
@@ -370,7 +360,7 @@ def plot_lob_trades_volume(lob, trades):
 
     ax1.set_ylabel('Price', color='k')
     plt.title('Trades and Best Limits')
-    plt.savefig(fig_path + 'plot_lob_trades_volume_prop.png')
+    #plt.savefig(fig_path + 'plot_lob_trades_volume_prop.png')
     plt.show()
 
 
@@ -394,12 +384,12 @@ def plot_lob_trades_imbalance_reg_grid(lob, trades, Time):
 
     ax2.plot(imbalance,'g-', linewidth=1)
     ax2.set_ylabel('Imbalance', color='g')
-
-    return fig
+    plt.show()
 
 ###################################TESTING AREA####################################################
 path_lob ='/home/evanged/Dropbox/Work-Research/Finance/LOB Study Data/QuotesByLevel/'
 path_trades = '/home/evanged/Dropbox/Work-Research/Finance/NewMarketData/Trades/'
+path_trades_mac = '/Users/evanged/Dropbox/Work-Research/Finance/NewMarketData/Trades/'
 path_cancelled = '/home/evanged/Dropbox/Work-Research/Finance/NewMarketData/CanceledOrders/'
 symbol = "DOLJ17"
 starttime = '10:00:00.000'
@@ -407,21 +397,21 @@ endtime = '17:00:00.000'
 depth = 1
 date = [datetime.datetime(2017, 3, 10)]
 i = 0
+buy_broker = 'All'
 
-#write_pickle_data(path_lob, path_cancelled, path_trades, symbol, date[i])
+#write_pickle_data(path_lob, path_cancelled, path_trades_mac, symbol, date[i])
 lob, cancellations, trades = load_pickle_data()
 #plot_imbalance_one_day()
 
-#fig_imb = plot_imbalance_reg_grid('10m'); fig_imb.show()
-#fig_lob = plot_lob_one_day(); fig_lob.show()
-#fig_lob_reg_grid = plot_lob_reg_grid('10m'); fig_lob_reg_grid.show()
-#fig_lob_imb = plot_lob_and_imbalance_reg_grid('5m'); fig_lob_imb.show()
-#plot_lob_trades_volume(lob, trades); fig_lob_trades_volume.show()
-#fig_lob_trades_imbalance_reg_grid = plot_lob_trades_imbalance_reg_grid(lob, trades, '10m'); fig_lob_trades_imbalance_reg_grid.show()
+#plot_imbalance_reg_grid('10m')
+#plot_lob_one_day()
+#plot_lob_reg_grid('10m')
+#plot_lob_and_imbalance_reg_grid('5m')
+#plot_lob_trades_volume(lob, trades)
+#plot_lob_trades_imbalance_reg_grid(lob, trades, '10m')
 
 #res = plot_spread_midprice(lob)
-#imbalance_regime(lob, trades)
-#lob_imb, imblob, imblob_nona = plot_imbalance_trades(lob, trades)
+#imbalance_regime(lob, trades, buy_broker)
 
 
 #plot_lob_trades_volume(lob, trades)

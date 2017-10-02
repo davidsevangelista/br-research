@@ -166,31 +166,6 @@ def get_lob_trade_imbalance(lob, trades):
             rsuffix=' Trade Buy MO')
     lob_trade = trades.join(lob,how='outer')#.fillna(method='ffill')
 
-    #columns_to_fill = ['Bid Price0', 'Ask Price0',
-    #                   'Bid Volume0', 'Ask Volume0']
-    #lob_trade[columns_to_fill] = lob_trade[columns_to_fill].fillna(method='ffill')
-
-    #vol_walk = trades.groupby(trades.index)['Volume'].agg(['sum','count'])
-    #vol_walk.columns = ['Total Volume', 'Count']
-
-
-    #count_buy_walk = trades.groupby(trades.index)['Price Trade Buy MO'].agg(['count'])
-    #count_buy_walk.columns=['Count Buy']
-
-
-    #count_sell_walk = trades.groupby(trades.index)['Price Trade Sell MO'].agg(['count'])
-    #count_sell_walk.columns=['Count Sell']
-
-
-    #trades = drop_rep(trades).join(vol_walk, how='outer')
-    #trades = trades.join(count_buy_walk, how='outer')
-    #trades = trades.join(count_sell_walk, how='outer')
-
-    # To compare lob with trades
-    #lob = lob.shift(-1)
-    #lob_trade = lob.join(trades, how='outer')
-
-
     # Join lob with imbalance
     imbalance = pd.DataFrame(get_imbalance(lob_trade))
     imbalance.columns=['Imbalance']
@@ -198,10 +173,11 @@ def get_lob_trade_imbalance(lob, trades):
     # Update lob_trade
     imbalance2 = imbalance.reset_index()
     lob_trade2 = lob_trade.reset_index()
-    #lob_trade = lob_trade2.merge(imbalance2.drop_duplicates(subset=['Report Time']), how='left',on=['Report Time'])
-    lob_trade = imbalance2.merge(lob_trade2.drop_duplicates(subset=['Report Time']), how='left',on=['Report Time'])
+    #lob_trade = lob_trade2.merge(imbalance2.\
+    #        drop_duplicates(subset=['Report Time']), how='left',on=['Report Time'])
+    lob_trade = imbalance2.merge(lob_trade2.\
+            drop_duplicates(subset=['Report Time']), how='left',on=['Report Time'])
 
-    lob_trade.set_index('Report Time')#, inplace=True)
 
     # Make sure there is no imbalance with NaN
     #lob_trade['Imbalance'] = lob_trade['Imbalance'].fillna(method='ffill')

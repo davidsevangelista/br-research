@@ -144,7 +144,7 @@ def get_lob_trade_imbalance(lob, trades):
     lob = lob.shift(-1)
     # Join lob and trades at the same time stamp
     trades = trades[["Price", "Volume", "Buy Broker", "Sell Broker",
-                     "Buy Agressor", "Sell Agressor", "Cross Indicator"]].dropna(subset=['Price'])
+                     "Buy Agressor", "Sell Agressor", "Cross Indicator"]]#.dropna(subset=['Price'])
 
     # This is to exclude auctions and agressive buy and sell
     # at the same Report Time
@@ -397,8 +397,8 @@ def plot_lob_trades_volume(lob, trades):
     lob_trade, imb_bins = get_lob_trade_imbalance(lob, trades)
     lob_trade.set_index('Report Time', inplace=True)
 
-    start = 148200
-    end = 150500
+    start = 48200
+    end = 52500
     lob_trade = lob_trade.iloc[start:end]
 
     fig = plt.figure()
@@ -419,7 +419,7 @@ def plot_lob_trades_volume(lob, trades):
     ax1.set_ylabel('Price', color='k')
     plt.title('Trades and Best Limits')
     plt.legend()
-    plt.savefig(fig_path + 'plot_lob_trades_volume_prop.png')
+    #plt.savefig(fig_path + 'plot_lob_trades_volume_prop.png')
     plt.show()
 
 

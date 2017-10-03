@@ -27,18 +27,6 @@ trades_columns = ['Time Frame',
                   'Buy Broker',
                   'Sell Broker']
 
-#trades_columns = ["Time Frame",
-#		  "Report Time",
-#		  "Price",
-#		  "Volume",
-#		  "Buy Seq Order Number",
-#		  "Buy Agressor",
-#		  "Sell Seq Order Number",
-#		  "Sell Agressor",
-#		  "Cross Indicator",
-#		  "Buy Broker",
-#		  "Sell Broker"]
-
 def loadstr(filename):
     dat = np.loadtxt(filename, dtype=np.str_, delimiter=';')
     for i in range(0,np.size(dat[:,0])):

@@ -11,7 +11,7 @@ cancelled_and_LO_columns = ["Time Frame",
                             "Report Time",
                             "Side",
                             "Order Quantity",
-                            "Order Price",
+                            "Price",
                             "Execution Quantity",
                             "Seq Order Number",
                             "Broker"]
@@ -26,7 +26,14 @@ trades_columns = ['Time Frame',
                   'Cross Indicator',
                   'Buy Broker',
                   'Sell Broker']
-
+filled_LO_columns =	['Time Frame',
+			 'Report Time',
+			 'Side',
+			 'Order Quantity',
+			 "Price",
+			 'Execution Quantity',
+			 'Seq Order Number',
+			 'Broker']
 def loadstr(filename):
     dat = np.loadtxt(filename, dtype=np.str_, delimiter=';')
     for i in range(0,np.size(dat[:,0])):
@@ -36,6 +43,23 @@ def loadstr(filename):
             dat[i,j] = mystring[2:tick]
 
     return (dat)
+
+def load_filled_LO_zip(path,symbol,date):
+    zip_name = path + symbol + '_' + date.strftime("%Y%m%d") + ".zip"
+    x = []
+    if (Path(zip_name).is_file()):
+        zip = zipfile.ZipFile(zip_name)
+        file = symbol + "_LO_" + date.strftime("%Y%m%d") + ".txt"
+        if (file in [i.filename for i in zip.filelist]):
+            x = pd.read_csv(zip.open(file, 'r'),sep=';')
+            x.columns = cancelled_and_LO_columns
+            x['Order Quantity'] = pd.to_numeric(x['Order Quantity'],errors='coerce')
+            x['Execution Quantity'] = pd.to_numeric(\
+                    x['Execution Quantity'],errors='coerce')
+            x["Price"] = pd.to_numeric(x["Price"],errors='coerce')
+            x['Report Time'] = pd.to_datetime(x['Report Time'])
+            x.set_index('Report Time', inplace=True)
+    return x
 
 def load_LONEW_zip(path,symbol,date):
     zip_name = path + symbol + '_' + date.strftime("%Y%m%d") + ".zip"
@@ -50,7 +74,7 @@ def load_LONEW_zip(path,symbol,date):
             x.columns = cancelled_and_LO_columns
             x["Order Quantity"] = pd.to_numeric(x["Order Quantity"],errors='coerce')
             x["Execution Quantity"] = pd.to_numeric(x["Execution Quantity"],errors='coerce')
-            x["Order Price"] = pd.to_numeric(x["Order Price"],errors='coerce')
+            x["Price"] = pd.to_numeric(x["Price"],errors='coerce')
             x["Report Time"] = pd.to_datetime(x["Report Time"])
             x.set_index("Report Time", inplace=True)
 
@@ -68,7 +92,7 @@ def load_cancelled_order_zip(path,symbol,date):
             x.columns = cancelled_and_LO_columns
             x["Order Quantity"] = pd.to_numeric(x["Order Quantity"],errors='coerce')
             x["Execution Quantity"] = pd.to_numeric(x["Execution Quantity"],errors='coerce')
-            x["Order Price"] = pd.to_numeric(x["Order Price"],errors='coerce')
+            x["Price"] = pd.to_numeric(x["Price"],errors='coerce')
             x["Report Time"] = pd.to_datetime(x["Report Time"])
             x.set_index("Report Time", inplace=True)
 
